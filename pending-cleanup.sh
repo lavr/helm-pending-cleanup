@@ -30,40 +30,68 @@ error() { echo "[pending-cleanup][ERROR] $*" >&2; exit 1; }
 # Convert ISO-8601 date from Helm to epoch seconds (GNU + BSD/macOS).
 # Handles nanoseconds and "Z" or "+HH:MM" time-zones.
 #-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# to_epoch(): Convert ISO-8601 from Helm to epoch seconds on any platform
+#-------------------------------------------------------------------------------
 to_epoch() {
   local raw="$1"
 
-  # GNU coreutils present → easiest path
+  # 1) Normalization ------------------------------------------------------------
+  #    * 'Z'  → '+0000'
+  #    * drop nanoseconds
+  #    * '+00:00' → '+0000'
+  local norm="$raw"
+  norm="${norm/Z/+0000}"
+  norm="$(echo "$norm" | sed -E 's/\.[0-9]+([+-].*)/\1/')"          # strip .nsec
+  norm="$(echo "$norm" | sed -E 's/([+-][0-9]{2}):?([0-9]{2})/\1\2/')" # tz colon
+
+  # 2) Try GNU date --------------------------------------------------------
   if date --version >/dev/null 2>&1; then
-    date -u -d "$raw" +%s
+    date -u -d "$norm" +%s && return
+  fi
+
+  # 3) Try BusyBox date (-D) ----------------------------------------
+  if date -u -D '%Y-%m-%dT%H:%M:%S' -d "$norm" +%s 2>/dev/null; then
     return
   fi
 
-  # ---- BSD path --------------------------------------------------------------
-  local norm="$raw"
+  # 4) Try BSD/macOS date --------------------------------------------------
+  if date -j -u -f '%Y-%m-%dT%H:%M:%S' "$norm" '+%s' 2>/dev/null; then
+    return
+  fi
 
-  # 1) Convert trailing "Z" to "+0000"
-  norm="${norm/Z/+0000}"
-
-  # 2) Remove fractional seconds (".123456789")
-  norm="$(echo "$norm" | sed -E 's/\.[0-9]+([+-].*)/\1/')"
-
-  # 3) Remove colon in time-zone offset ("+00:00" → "+0000")
-  norm="$(echo "$norm" | sed -E 's/([+-][0-9]{2}):?([0-9]{2})/\1\2/')"
-
-  # 4) Parse: 2025-01-31T14:31:34+0000
-  date -j -u -f '%Y-%m-%dT%H:%M:%S%z' "$norm" '+%s' 2>/dev/null \
-    || { echo "[pending-cleanup][ERROR] Cannot parse date '$raw'" >&2; return 1; }
+  # 5) All fails ------------------------------------------------------
+  echo "[pending-cleanup][ERROR] Cannot parse date '$raw'" >&2
+  return 1
 }
 
-# Print epoch in human-readable UTC form.
+
+#-------------------------------------------------------------------------------
+# Convert epoch → human-readable UTC (works on GNU, BSD, BusyBox, Bash ≥ 4.2).
+#-------------------------------------------------------------------------------
 human_date() {
   local e="$1"
+
+  # 1) GNU coreutils: date -d "@<epoch>"
   if date --version >/dev/null 2>&1; then
     date -u -d "@$e" '+%Y-%m-%d %H:%M:%S'
-  else
-    date -u -r "$e" '+%Y-%m-%d %H:%M:%S'
+    return
   fi
+
+  # 2) BSD/macOS: date -r <epoch>
+  if date -u -r "$e" '+%Y-%m-%d %H:%M:%S' >/dev/null 2>&1; then
+    date -u -r "$e" '+%Y-%m-%d %H:%M:%S'
+    return
+  fi
+
+  # 3) BusyBox (if supports -d "@<epoch>")
+  if date -u -d "@$e" '+%Y-%m-%d %H:%M:%S' >/dev/null 2>&1; then
+    date -u -d "@$e" '+%Y-%m-%d %H:%M:%S'
+    return
+  fi
+
+  # 4) Fallback: Bash builtin printf '%T' (Bash ≥ 4.2, TZ=UTC)
+  TZ=UTC printf '%(%Y-%m-%d %H:%M:%S)T\n' "$e"
 }
 
 # Converts 10m/4h/2d/1w to seconds
