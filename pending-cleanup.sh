@@ -19,12 +19,11 @@ Arguments:
 
 Flags:
   -v, --verbose             Verbose log output.
-  -n, --namespace <value>   Kubernetes namespace to target.
   -h, --help                Show this help and exit.
 EOF
 }
 
-log()   { [[ "$VERBOSE" == "true" ]] && echo "[pending-cleanup] $*" >&2; }
+log()   { [[ "$VERBOSE" == "true" ]] && echo "[pending-cleanup] $*" >&2 || true; }
 error() { echo "[pending-cleanup][ERROR] $*" >&2; exit 1; }
 
 #-------------------------------------------------------------------------------
@@ -85,14 +84,9 @@ parse_duration() {
 # CLI parsing
 ###############################################################################
 VERBOSE=false
-USER_NS=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     -v|--verbose) VERBOSE=true; shift ;;
-    -n|--namespace)
-        shift
-        [[ $# -gt 0 ]] || error "--namespace requires value"
-        USER_NS=$1; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; break ;;
     -*) error "Unknown flag: $1" ;;
@@ -110,18 +104,16 @@ for cmd in helm kubectl jq; do command -v "$cmd" >/dev/null || error "$cmd not f
 ###############################################################################
 # Release inspection
 ###############################################################################
-HELM_NS_ARGS=()
-[[ -n "$USER_NS" ]] && HELM_NS_ARGS=(-n "$USER_NS")
 
-log "Fetching status for release '$RELEASE' ${USER_NS:+in namespace '$USER_NS'}"
-release_json=$(helm status "${HELM_NS_ARGS[@]}" "$RELEASE" -o json 2>/dev/null) \
+log "Fetching status for release '$RELEASE'"
+release_json=$(helm status "$RELEASE" -o json 2>/dev/null) \
   || error "helm status failed for '$RELEASE'"
 
 status=$(jq -r '.info.status'       <<<"$release_json")
 last_deploy=$(jq -r '.info.last_deployed' <<<"$release_json")
 ns_from_status=$(jq -r '.namespace'  <<<"$release_json")
 revision=$(jq -r '.version'  <<<"$release_json")
-TARGET_NS=${USER_NS:-$ns_from_status}
+TARGET_NS=$ns_from_status
 
 last_epoch=$(to_epoch "$last_deploy") || error "Cannot parse last_deployed"
 
