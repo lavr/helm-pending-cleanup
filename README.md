@@ -20,24 +20,14 @@ It is designed for CI pipelines and operators who need to keep clusters tidy.
 
 ## Requirements
 
-Plugin depends on Helm, kubectk, jq, bash
+Plugin depends on Helm, kubectl, jq, bash
 
 ---
 
 ## Installation
 
 ```bash
-# 1) Create plugin directory
-mkdir -p ~/.config/helm/plugins/pending-cleanup
-
-# 2) Place plugin.yaml and pending-cleanup script here
-cp plugin.yaml pending-cleanup ~/.config/helm/plugins/pending-cleanup/
-
-# 3) Make the script executable
-chmod +x ~/.config/helm/plugins/pending-cleanup/pending-cleanup
-
-# 4) Verify
-helm plugin list
+helm plugin install https://github.com/lavr/helm-pending-cleanup
 ```
 
 ## Usage
