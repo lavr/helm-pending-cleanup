@@ -1,0 +1,16 @@
+name: "pending-cleanup"
+version: "0.1.1"
+usage: |
+  helm pending-cleanup [flags] <release> <age> <action>
+
+  <release> : Helm release name
+  <age>     : Threshold age (epoch seconds) OR duration string (e.g. 30m, 2h, 7d)
+  <action>  : print | delete
+
+flags:
+  -v, --verbose     Verbose log output
+  -n, --namespace   Kubernetes namespace to target
+  -h, --help        Show help
+description: "Delete or list Helm secrets for stale pending releases."
+command: "$HELM_PLUGIN_DIR/pending-cleanup"
+ignoreFlags: false
