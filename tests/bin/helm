@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+if [[ "$1" == "status" ]]; then
+  cat "$TEST_TMPDIR/helm_status.json"
+else
+  echo "helm stub: unexpected args: $@" >&2
+  exit 1
+fi
