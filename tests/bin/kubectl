@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+if [[ "$1" == "get" && "$2" == "secrets" ]]; then
+  cat "$TEST_TMPDIR/kubectl_get_secrets.txt"
+elif [[ "$1" == "delete" && "$2" == "secret" ]]; then
+  echo "$@" >> "$TEST_TMPDIR/kubectl_delete.log"
+else
+  echo "kubectl stub: unexpected args: $@" >&2
+  exit 1
+fi
