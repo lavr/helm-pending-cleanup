@@ -4,8 +4,9 @@ TEST_DIR=$(dirname "$0")
 REPO_ROOT=$(cd "$TEST_DIR/.." && pwd)
 export PATH="$REPO_ROOT/tests/bin:$PATH"
 TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
-export TEST_TMPDIR="$TMPDIR"
+#trap 'rm -rf "$TMPDIR"' EXIT
+TEST_TMPDIR_PREFIX="$TEST_DIR/.data"
+
 
 fail() { echo "FAIL: $1"; exit 1; }
 
@@ -29,6 +30,8 @@ write_secrets() {
 }
 
 # Test printing secrets for pending release
+export TEST_TMPDIR=$TEST_TMPDIR_PREFIX/01
+mkdir -p "$TEST_TMPDIR"
 write_status "pending-install" "2023-01-01T00:00:00Z"
 write_secrets secret1 secret2
 output=$("$REPO_ROOT/pending-cleanup.sh" test-release 1h print)
@@ -36,15 +39,18 @@ output=$("$REPO_ROOT/pending-cleanup.sh" test-release 1h print)
 [[ ! -f "$TEST_TMPDIR/kubectl_delete.log" ]] || fail "delete log present for print"
 
 # Test deletion of secrets
+export TEST_TMPDIR=$TEST_TMPDIR_PREFIX/02
+mkdir -p "$TEST_TMPDIR"
 write_status "pending-upgrade" "2023-01-01T00:00:00Z"
 write_secrets s1 s2
 "$REPO_ROOT/pending-cleanup.sh" test-release 1h delete >/dev/null
 [[ -f "$TEST_TMPDIR/kubectl_delete.log" ]] || fail "delete log missing"
 count=$(wc -l < "$TEST_TMPDIR/kubectl_delete.log")
 [[ "$count" -eq 2 ]] || fail "expected 2 delete calls, got $count"
-rm -f "$TEST_TMPDIR/kubectl_delete.log"
 
 # Test non-pending release does nothing
+export TEST_TMPDIR=$TEST_TMPDIR_PREFIX/03
+mkdir -p "$TEST_TMPDIR"
 write_status "deployed" "2023-01-01T00:00:00Z"
 write_secrets foo
 "$REPO_ROOT/pending-cleanup.sh" test-release 1h print >/dev/null
