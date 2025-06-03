@@ -9,7 +9,6 @@ usage: |
 
   flags:
     -v, --verbose     Verbose log output
-    -n, --namespace   Kubernetes namespace to target
     -h, --help        Show help
 description: "Delete or list Helm secrets for stale pending releases."
 command: "$HELM_PLUGIN_DIR/pending-cleanup.sh"
