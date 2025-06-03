@@ -42,7 +42,6 @@ Arguments:
 
 Flags:
   -v, --verbose             Verbose log output.
-  -n, --namespace <value>   Kubernetes namespace to target.
   -h, --help                Show help and exit.
 ```
 
