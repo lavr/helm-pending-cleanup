@@ -51,12 +51,12 @@ to_epoch() {
   fi
 
   # 3) Try BusyBox date (-D) ----------------------------------------
-  if date -u -D '%Y-%m-%dT%H:%M:%S' -d "$norm" +%s 2>/dev/null; then
+  if date -u -D '%Y-%m-%dT%H:%M:%S%z' -d "$norm" +%s 2>/dev/null; then
     return
   fi
 
   # 4) Try BSD/macOS date --------------------------------------------------
-  if date -j -u -f '%Y-%m-%dT%H:%M:%S' "$norm" '+%s' 2>/dev/null; then
+  if date -j -u -f '%Y-%m-%dT%H:%M:%S%z' "$norm" '+%s' 2>/dev/null; then
     return
   fi
 
@@ -134,8 +134,25 @@ for cmd in helm kubectl jq; do command -v "$cmd" >/dev/null || error "$cmd not f
 ###############################################################################
 
 log "Fetching status for release '$RELEASE'"
-release_json=$(helm status "$RELEASE" -o json 2>/dev/null) \
-  || error "helm status failed for '$RELEASE'"
+helm_status_args=(status "$RELEASE" --output json)
+if [[ -n "${HELM_NAMESPACE:-}" ]]; then
+  helm_status_args+=(-n "$HELM_NAMESPACE")
+elif [[ -n "${HELM_DEFAULT_NAMESPACE:-}" ]]; then
+  helm_status_args+=(-n "$HELM_DEFAULT_NAMESPACE")
+fi
+
+if ! helm_status_raw=$(helm "${helm_status_args[@]}" 2>&1); then
+  log "$helm_status_raw"
+  error "helm status failed for '$RELEASE'"
+fi
+
+# jq is used here to strip any leading plugin warnings from the Helm JSON.
+if ! release_json=$(printf '%s' "$helm_status_raw" \
+                      | jq -rRs 'capture("(?s)(?<json>\\{.*\\})") | .json'); then
+  log "helm status produced unexpected output:"
+  log "$helm_status_raw"
+  error "Cannot parse helm status output"
+fi
 
 status=$(jq -r '.info.status'       <<<"$release_json")
 last_deploy=$(jq -r '.info.last_deployed' <<<"$release_json")
@@ -171,15 +188,16 @@ if [[ "$status" =~ ^pending ]]; then
       exit 0
     fi
     if [[ "$ACTION" == "print" ]]; then
-      printf '%s\n' $secrets
+      printf '%s\n' "$secrets"
     else
-      for s in $secrets; do
+      while IFS= read -r s; do
+        [[ -z "$s" ]] && continue
         if [[ "$VERBOSE" == "true" ]]; then
-          kubectl delete secret "$s" -n "$TARGET_NS"
+          kubectl delete secret "$s" -n "$TARGET_NS" --ignore-not-found
         else
           kubectl delete secret "$s" -n "$TARGET_NS" --ignore-not-found >/dev/null 2>&1
         fi
-      done
+      done <<< "$secrets"
     fi
   else
     log "Release age below threshold; skipped"

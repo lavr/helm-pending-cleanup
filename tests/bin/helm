@@ -1,7 +1,56 @@
 #!/usr/bin/env bash
-if [[ "$1" == "status" ]]; then
-  cat "$TEST_TMPDIR/helm_status.json"
-else
-  echo "helm stub: unexpected args: $@" >&2
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+  echo "helm stub: missing command" >&2
   exit 1
 fi
+
+cmd=$1
+shift
+
+case "$cmd" in
+  status)
+    release=""
+    namespace=""
+    output=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -n|--namespace)
+          namespace=$2
+          shift 2
+          ;;
+        -o|--output)
+          output=$2
+          shift 2
+          ;;
+        *)
+          if [[ -z "$release" ]]; then
+            release=$1
+            shift
+          else
+            echo "helm stub: unexpected arg: $1" >&2
+            exit 1
+          fi
+          ;;
+      esac
+    done
+    if [[ -n "${EXPECTED_HELM_NAMESPACE:-}" && "$namespace" != "$EXPECTED_HELM_NAMESPACE" ]]; then
+      echo "helm stub: expected namespace '$EXPECTED_HELM_NAMESPACE' but got '$namespace'" >&2
+      exit 1
+    fi
+    if [[ "${output:-}" != "json" ]]; then
+      echo "helm stub: expected --output json, got '$output'" >&2
+      exit 1
+    fi
+    if [[ -f "$TEST_TMPDIR/helm_status_raw" ]]; then
+      cat "$TEST_TMPDIR/helm_status_raw"
+    else
+      cat "$TEST_TMPDIR/helm_status.json"
+    fi
+    ;;
+  *)
+    echo "helm stub: unexpected command '$cmd'" >&2
+    exit 1
+    ;;
+esac

@@ -55,7 +55,7 @@ Flags:
 
 2. List helm secrets for helm release stalled before specific epoch time
 
-    # List if last stalled deployment occurred before 12 May 2025 00:00 UTC
+    # Delete if last stalled deployment occurred before 12 May 2025 00:00 UTC
     helm pending-cleanup my-release 1715558400 delete
 
 
