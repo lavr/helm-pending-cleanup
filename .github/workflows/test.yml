@@ -8,26 +8,29 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.name }})
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        include:
+          - name: Ubuntu
+            runner: ubuntu-latest
+          - name: macOS
+            runner: macos-latest
+          - name: Alpine
+            runner: ubuntu-latest
+            container: alpine:3.20
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container || '' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install jq
-        if: runner.os == 'Linux'
+      - name: Install deps (Alpine)
+        if: matrix.container == 'alpine:3.20'
+        run: apk add --no-cache bash jq
+
+      - name: Install deps (Ubuntu)
+        if: matrix.container == '' && runner.os == 'Linux'
         run: sudo apt-get install -y jq
 
-      - name: Run tests
-        run: bash tests/run-tests.sh
-
-  test-alpine:
-    runs-on: ubuntu-latest
-    container: alpine:3.20
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install deps
-        run: apk add --no-cache bash jq
       - name: Run tests
         run: bash tests/run-tests.sh
