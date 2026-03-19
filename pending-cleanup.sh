@@ -36,31 +36,39 @@ error() { echo "[pending-cleanup][ERROR] $*" >&2; exit 1; }
 to_epoch() {
   local raw="$1"
 
-  # 1) Normalization ------------------------------------------------------------
-  #    * 'Z'  → '+0000'
-  #    * drop nanoseconds
-  #    * '+00:00' → '+0000'
-  local norm="$raw"
-  norm="${norm/Z/+0000}"
-  norm="$(echo "$norm" | sed -E 's/\.[0-9]+([+-].*)/\1/')"          # strip .nsec
-  norm="$(echo "$norm" | sed -E 's/([+-][0-9]{2}):?([0-9]{2})/\1\2/')" # tz colon
+  # 1) Normalize: Z→+0000, strip nanoseconds, strip tz colon
+  local norm
+  norm="$(echo "$raw" | sed 's/Z$/+0000/')"
+  norm="$(echo "$norm" | sed -E 's/\.[0-9]+([+-])/\1/')"
+  norm="$(echo "$norm" | sed -E 's/([+-][0-9]{2}):([0-9]{2})$/\1\2/')"
 
-  # 2) Try GNU date --------------------------------------------------------
-  if date --version >/dev/null 2>&1; then
-    date -u -d "$norm" +%s && return
-  fi
+  # 2) Try GNU date
+  date -u -d "$norm" +%s 2>/dev/null && return
 
-  # 3) Try BusyBox date (-D) ----------------------------------------
-  if date -u -D '%Y-%m-%dT%H:%M:%S%z' -d "$norm" +%s 2>/dev/null; then
+  # 3) Try BusyBox date (no %z support — strip offset and adjust manually)
+  local tz_part notz epoch sign hours mins offset_sec
+  tz_part="$(echo "$norm" | grep -oE '[+-][0-9]{4}$')"
+  notz="$(echo "$norm" | sed -E 's/[+-][0-9]{4}$//')"
+  epoch=$(date -u -D '%Y-%m-%dT%H:%M:%S' -d "$notz" +%s 2>/dev/null) || true
+  if [ -n "$epoch" ]; then
+    if [ -n "$tz_part" ]; then
+      sign="${tz_part:0:1}"
+      hours="${tz_part:1:2}"
+      mins="${tz_part:3:2}"
+      offset_sec=$(( (10#$hours * 3600) + (10#$mins * 60) ))
+      if [ "$sign" = "+" ]; then
+        epoch=$((epoch - offset_sec))
+      else
+        epoch=$((epoch + offset_sec))
+      fi
+    fi
+    echo "$epoch"
     return
   fi
 
-  # 4) Try BSD/macOS date --------------------------------------------------
-  if date -j -u -f '%Y-%m-%dT%H:%M:%S%z' "$norm" '+%s' 2>/dev/null; then
-    return
-  fi
+  # 4) Try BSD/macOS date
+  date -j -u -f '%Y-%m-%dT%H:%M:%S%z' "$norm" '+%s' 2>/dev/null && return
 
-  # 5) All fails ------------------------------------------------------
   echo "[pending-cleanup][ERROR] Cannot parse date '$raw'" >&2
   return 1
 }
